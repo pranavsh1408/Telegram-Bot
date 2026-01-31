@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phonepe-voucher-tracker"
+version = "1.0.0"
+description = "Telegram bot to track PhonePe voucher availability on StanShop"
+requires-python = ">=3.9"
+dependencies = [
+    "python-telegram-bot>=22.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "APScheduler>=3.10.0",
+]
