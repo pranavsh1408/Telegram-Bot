@@ -7,11 +7,98 @@ import os
 import json
 from http.server import BaseHTTPRequestHandler
 import requests
+from datetime import datetime
 
 # Get token from environment
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+KV_REST_API_URL = os.environ.get("KV_REST_API_URL", "")
+KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN", "")
+
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 STANSHOP_PRODUCT_URL = "https://www.stanshop.co/in/product/phonepe-gift-voucher"
+
+
+def kv_get(key):
+    """Get value from Vercel KV."""
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return None
+    try:
+        resp = requests.get(
+            f"{KV_REST_API_URL}/get/{key}",
+            headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
+            timeout=5
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            result = data.get("result")
+            if result:
+                return json.loads(result)
+        return None
+    except:
+        return None
+
+
+def kv_set(key, value):
+    """Set value in Vercel KV."""
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return False
+    try:
+        resp = requests.post(
+            f"{KV_REST_API_URL}/set/{key}",
+            headers={
+                "Authorization": f"Bearer {KV_REST_API_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json=json.dumps(value),
+            timeout=5
+        )
+        return resp.status_code == 200
+    except:
+        return False
+
+
+def load_tracked_users():
+    """Load tracked users from KV storage."""
+    users = kv_get("tracked_users")
+    return users if users else {}
+
+
+def save_tracked_users(users):
+    """Save tracked users to KV storage."""
+    kv_set("tracked_users", users)
+
+
+def add_tracked_user(chat_id, username=None):
+    """Add a user to tracking list."""
+    users = load_tracked_users()
+    users[str(chat_id)] = {
+        "username": username,
+        "tracked_at": datetime.now().isoformat(),
+        "notified": False
+    }
+    save_tracked_users(users)
+
+
+def remove_tracked_user(chat_id):
+    """Remove a user from tracking list."""
+    users = load_tracked_users()
+    if str(chat_id) in users:
+        del users[str(chat_id)]
+        save_tracked_users(users)
+        return True
+    return False
+
+
+def is_user_tracking(chat_id):
+    """Check if a user is currently tracking."""
+    users = load_tracked_users()
+    return str(chat_id) in users
+
+
+def get_user_status(chat_id):
+    """Get tracking status for a user."""
+    users = load_tracked_users()
+    return users.get(str(chat_id))
 
 
 def send_message(chat_id, text, parse_mode="Markdown"):
@@ -31,6 +118,31 @@ def send_message(chat_id, text, parse_mode="Markdown"):
         return None
 
 
+def check_stock():
+    """Check PhonePe voucher stock."""
+    try:
+        api_url = "https://api.getstan.app/api/v1/shop/store/inventory/slug/phonepe-gift-voucher"
+        resp = requests.get(api_url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            variants = data.get("data", {}).get("variants", [])
+            
+            if variants:
+                available = [v for v in variants if v.get("available", False)]
+                if available:
+                    msg = "✅ *Stock Available!*\n\n"
+                    for v in available:
+                        name = v.get("title", "Unknown")
+                        price = v.get("price", 0) / 100
+                        msg += f"• {name}: ₹{price:.0f}\n"
+                    msg += f"\n🔗 [Buy Now]({STANSHOP_PRODUCT_URL})"
+                    return {"available": True, "message": msg}
+            return {"available": False, "message": "❌ *Out of Stock*\n\nNo vouchers currently available."}
+        return {"available": False, "message": "⚠️ Could not check stock. Try again later."}
+    except Exception as e:
+        return {"available": False, "message": f"⚠️ Error checking stock: {str(e)}"}
+
+
 def handle_command(chat_id, command, username=None):
     """Handle bot commands."""
     
@@ -41,41 +153,58 @@ def handle_command(chat_id, command, username=None):
 Welcome! I'll help you track PhonePe gift voucher availability.
 
 *Commands:*
-/start - Show this welcome message
+/track - Start tracking for stock alerts
+/untrack - Stop tracking
 /check - Check current stock status
+/status - View your tracking status
 /help - Show this help message
 
 🔗 [View on StanShop]({STANSHOP_PRODUCT_URL})
 """)
     
+    elif command == "/track":
+        if not KV_REST_API_URL:
+            send_message(chat_id, "⚠️ Tracking is not configured. Contact the bot admin.")
+            return
+            
+        if is_user_tracking(chat_id):
+            user_data = get_user_status(chat_id)
+            if user_data and user_data.get("notified"):
+                add_tracked_user(chat_id, username)
+                send_message(chat_id, "🔄 *Tracking Reset!*\n\nI'll notify you when new stock arrives.")
+            else:
+                send_message(chat_id, "✅ You're already tracking!\n\nUse /untrack to stop.")
+        else:
+            add_tracked_user(chat_id, username)
+            send_message(chat_id, "🔔 *Tracking Started!*\n\nI'll notify you when vouchers become available.")
+    
+    elif command == "/untrack":
+        if remove_tracked_user(chat_id):
+            send_message(chat_id, "🔕 *Tracking Stopped*\n\nUse /track to start again.")
+        else:
+            send_message(chat_id, "ℹ️ You weren't tracking.\nUse /track to start.")
+    
     elif command == "/check":
         send_message(chat_id, "🔍 Checking stock...")
-        # Simple stock check
-        try:
-            api_url = "https://api.getstan.app/api/v1/shop/store/inventory/slug/phonepe-gift-voucher"
-            resp = requests.get(api_url, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                variants = data.get("data", {}).get("variants", [])
-                
-                if variants:
-                    available = [v for v in variants if v.get("available", False)]
-                    if available:
-                        msg = "✅ *Stock Available!*\n\n"
-                        for v in available:
-                            name = v.get("title", "Unknown")
-                            price = v.get("price", 0) / 100
-                            msg += f"• {name}: ₹{price:.0f}\n"
-                        msg += f"\n🔗 [Buy Now]({STANSHOP_PRODUCT_URL})"
-                        send_message(chat_id, msg)
-                    else:
-                        send_message(chat_id, "❌ *Out of Stock*\n\nNo vouchers currently available.")
-                else:
-                    send_message(chat_id, "❌ *Out of Stock*\n\nNo vouchers currently available.")
+        result = check_stock()
+        send_message(chat_id, result["message"])
+    
+    elif command == "/status":
+        if is_user_tracking(chat_id):
+            user_data = get_user_status(chat_id)
+            if user_data and user_data.get("notified"):
+                track_status = "⚠️ Notified (use /track to re-enable)"
             else:
-                send_message(chat_id, "⚠️ Could not check stock. Try again later.")
-        except Exception as e:
-            send_message(chat_id, f"⚠️ Error checking stock: {str(e)}")
+                track_status = "✅ Active"
+        else:
+            track_status = "❌ Not tracking"
+        
+        send_message(chat_id, f"""
+📊 *Your Status*
+
+🔔 Tracking: {track_status}
+🔄 Check interval: Every 6 hours
+""")
     
     else:
         send_message(chat_id, "Unknown command. Use /help to see available commands.")
@@ -98,7 +227,7 @@ class handler(BaseHTTPRequestHandler):
             username = message.get("from", {}).get("username")
             
             if chat_id and text.startswith("/"):
-                command = text.split()[0].split("@")[0]  # Handle /command@botname
+                command = text.split()[0].split("@")[0]
                 handle_command(chat_id, command, username)
             
             self.send_response(200)
@@ -108,7 +237,7 @@ class handler(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"Webhook error: {e}")
-            self.send_response(200)  # Always return 200 to Telegram
+            self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True, "error": str(e)}).encode())
@@ -120,6 +249,7 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         status = {
             "status": "Bot webhook is active",
-            "token_set": bool(TELEGRAM_BOT_TOKEN)
+            "token_set": bool(TELEGRAM_BOT_TOKEN),
+            "kv_configured": bool(KV_REST_API_URL)
         }
         self.wfile.write(json.dumps(status).encode())
