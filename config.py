@@ -14,7 +14,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Monitoring Configuration
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "21600"))  # Default: 1 hour
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "86400"))  # Default: 24 hours (1 day)
 
 # StanShop API Configuration
 STANSHOP_API_URL = "https://api.getstan.app/api/v1/shop/store/inventory/slug/phonepe-gift-voucher"

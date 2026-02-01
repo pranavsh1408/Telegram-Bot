@@ -5,7 +5,7 @@ A Telegram bot that monitors PhonePe gift voucher availability on StanShop and s
 ## Features
 
 - 🔔 **Track Command**: Use `/track` to register for stock alerts
-- 📡 **Auto-Check**: Checks every hour automatically
+- 📡 **Auto-Check**: Checks once daily automatically
 - 🔕 **Smart Notifications**: Notifies once, then stops (no spam!)
 - 💰 **Denomination Details**: Shows all available denominations with prices
 - 🔄 **Re-enable Tracking**: Use `/track` again after notification
@@ -43,7 +43,7 @@ Edit `.env` and add your bot token:
 
 ```
 TELEGRAM_BOT_TOKEN=your_actual_bot_token
-CHECK_INTERVAL=21600
+CHECK_INTERVAL=86400
 ```
 
 ### 4. Start the Bot
@@ -79,7 +79,7 @@ https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook?url=https://<YOUR_VERCEL_URL
 
 ### 5. Verify Cron Job
 
-The stock check runs every 6 hours automatically. View logs in Vercel dashboard to confirm.
+The stock check runs once daily at 12:00 PM IST. View logs in Vercel dashboard to confirm.
 
 ### 5. Register for Notifications
 
@@ -110,7 +110,7 @@ The stock check runs every 6 hours automatically. View logs in Vercel dashboard 
 │   │   Webhook   │     │    Cron     │     │       Storage           │   │
 │   │  Handler    │     │   Handler   │     │    (Vercel KV)          │   │
 │   │             │     │             │     │                         │   │
-│   │ • /track    │     │ • Runs 4x   │     │ • Who's tracking?       │   │
+│   │ • /track    │     │ • Runs 1x   │     │ • Who's tracking?       │   │
 │   │ • /check    │     │   per day   │     │ • Who got notified?     │   │
 │   │ • /status   │     │ • Checks    │     │                         │   │
 │   │             │     │   StanShop  │     │                         │   │
@@ -162,7 +162,7 @@ User types /track
 
 ### Flow 2: Stock Monitoring (Scheduled)
 
-**Trigger:** Vercel Cron at 00:00, 06:00, 12:00, 18:00 UTC
+**Trigger:** Vercel Cron at 12:00 PM IST daily (06:30 UTC)
 
 ```
 [Vercel Cron triggers /api/cron]
@@ -188,7 +188,7 @@ User types /track
 ```
 
 **Key Design Decisions:**
-- **6-hour interval**: Balances between freshness and API rate limits
+- **Daily check**: Vercel free tier allows one cron job per day
 - **One-time notification**: Users only get 1 alert, then must re-enable (prevents spam)
 - **Change detection**: Only notifies when stock *appears* (not every time it's available)
 
@@ -289,17 +289,17 @@ User types /track
 
 ### Cron Schedule
 
-Schedule: `0 */6 * * *`
+Schedule: `30 6 * * *`
 
 | Field | Value | Meaning |
 |-------|-------|---------|
-| Minute | `0` | At minute 0 |
-| Hour | `*/6` | Every 6 hours (0, 6, 12, 18) |
+| Minute | `30` | At minute 30 |
+| Hour | `6` | At 6:30 UTC |
 | Day | `*` | Every day |
 | Month | `*` | Every month |
 | Weekday | `*` | Every day of week |
 
-**Check times (UTC):** 00:00, 06:00, 12:00, 18:00
+**Check time:** 06:30 UTC = 12:00 PM IST
 
 ---
 
