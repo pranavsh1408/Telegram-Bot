@@ -69,7 +69,29 @@ def kv_set(key, value):
 def load_tracked_users():
     """Load tracked users from KV storage."""
     users = kv_get("tracked_users")
-    return users if users else {}
+    
+    # Handle corrupted data - if it's a string, try to parse it
+    if isinstance(users, str):
+        try:
+            users = json.loads(users)
+        except:
+            print(f"Corrupted users data, resetting")
+            users = {}
+    
+    # Validate structure - each user entry should be a dict
+    if isinstance(users, dict):
+        cleaned = {}
+        for chat_id, data in users.items():
+            if isinstance(data, dict):
+                cleaned[chat_id] = data
+            elif isinstance(data, str):
+                try:
+                    cleaned[chat_id] = json.loads(data)
+                except:
+                    pass  # Skip corrupted entry
+        return cleaned
+    
+    return {} if not users else users
 
 
 def save_tracked_users(users):
