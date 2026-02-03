@@ -45,19 +45,24 @@ def kv_get(key):
 def kv_set(key, value):
     """Set value in Vercel KV."""
     if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        print("KV not configured")
         return False
     try:
+        # Serialize value to JSON string for storage
+        json_value = json.dumps(value)
         resp = requests.post(
             f"{KV_REST_API_URL}/set/{key}",
             headers={
                 "Authorization": f"Bearer {KV_REST_API_TOKEN}",
                 "Content-Type": "application/json"
             },
-            json=json.dumps(value),
+            data=json_value,  # Send as raw JSON string, not double-encoded
             timeout=5
         )
+        print(f"KV set response: {resp.status_code}")
         return resp.status_code == 200
-    except:
+    except Exception as e:
+        print(f"KV set error: {e}")
         return False
 
 
