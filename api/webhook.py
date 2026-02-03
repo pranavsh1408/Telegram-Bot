@@ -32,9 +32,13 @@ def kv_get(key):
             data = resp.json()
             result = data.get("result")
             if result:
-                return json.loads(result)
+                # Handle both string and dict responses
+                if isinstance(result, str):
+                    return json.loads(result)
+                return result  # Already a dict/list
         return None
-    except:
+    except Exception as e:
+        print(f"KV get error: {e}")
         return None
 
 
@@ -203,7 +207,7 @@ Welcome! I'll help you track PhonePe gift voucher availability.
 📊 *Your Status*
 
 🔔 Tracking: {track_status}
-🔄 Check interval: Every 6 hours
+🔄 Check interval: Daily at 12 PM IST
 """)
     
     else:
