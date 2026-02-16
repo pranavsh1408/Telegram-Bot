@@ -156,19 +156,25 @@ def check_stock():
         resp = requests.get(api_url, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            variants = data.get("data", {}).get("variants", [])
+            inventory = data.get("inventory", {})
+            denominations = inventory.get("stanValueDenomination", [])
             
-            if variants:
-                available = [v for v in variants if v.get("available", False)]
-                if available:
-                    msg = "✅ *Stock Available!*\n\n"
-                    for v in available:
-                        name = v.get("title", "Unknown")
-                        price = v.get("price", 0) / 100
-                        msg += f"• {name}: ₹{price:.0f}\n"
+            if denominations:
+                # Filter for active denominations
+                active = [d for d in denominations if d.get("status") == "active"]
+                if active:
+                    msg = "🎉 *PhonePe Vouchers Available!*\n\n"
+                    for d in active:
+                        value = d.get("value", "Unknown")
+                        price_info = d.get("price", {})
+                        price = price_info.get("amount", 0) if isinstance(price_info, dict) else price_info
+                        msg += f"💰 ₹{value}"
+                        if price:
+                            msg += f" - Price: ₹{price}"
+                        msg += "\n"
                     msg += f"\n🔗 [Buy Now]({STANSHOP_PRODUCT_URL})"
                     return {"available": True, "message": msg}
-            return {"available": False, "message": "❌ *Out of Stock*\n\nNo vouchers currently available."}
+            return {"available": False, "message": "📭 *No vouchers currently available*"}
         return {"available": False, "message": "⚠️ Could not check stock. Try again later."}
     except Exception as e:
         return {"available": False, "message": f"⚠️ Error checking stock: {str(e)}"}
