@@ -4,6 +4,7 @@ Handles incoming updates from Telegram via webhook.
 """
 
 import os
+import re
 import json
 from http.server import BaseHTTPRequestHandler
 import requests
@@ -15,7 +16,8 @@ KV_REST_API_URL = os.environ.get("KV_REST_API_URL", "")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN", "")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-STANSHOP_PRODUCT_URL = "https://www.stanshop.co/in/product/phonepe-gift-voucher"
+STANSHOP_PAGE_URL = "https://www.stanshop.co/in/product/phonepe-gift-card"
+STANSHOP_PRODUCT_URL = "https://www.stanshop.co/in/product/phonepe-gift-card"
 
 
 def kv_get(key):
@@ -150,32 +152,40 @@ def send_message(chat_id, text, parse_mode="Markdown"):
 
 
 def check_stock():
-    """Check PhonePe voucher stock."""
+    """Check PhonePe voucher stock by scraping the product page."""
     try:
-        api_url = "https://api.getstan.app/api/v1/shop/store/inventory/slug/phonepe-gift-voucher"
-        resp = requests.get(api_url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            inventory = data.get("inventory", {})
-            denominations = inventory.get("stanValueDenomination", [])
-            
-            if denominations:
-                # Filter for active denominations
-                active = [d for d in denominations if d.get("status") == "active"]
-                if active:
-                    msg = "🎉 *PhonePe Vouchers Available!*\n\n"
-                    for d in active:
-                        value = d.get("value", "Unknown")
-                        price_info = d.get("price", {})
-                        price = price_info.get("amount", 0) if isinstance(price_info, dict) else price_info
-                        msg += f"💰 ₹{value}"
-                        if price:
-                            msg += f" - Price: ₹{price}"
-                        msg += "\n"
-                    msg += f"\n🔗 [Buy Now]({STANSHOP_PRODUCT_URL})"
-                    return {"available": True, "message": msg}
-            return {"available": False, "message": "📭 *No vouchers currently available*"}
-        return {"available": False, "message": "⚠️ Could not check stock. Try again later."}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "text/html",
+        }
+        resp = requests.get(STANSHOP_PAGE_URL, headers=headers, timeout=30)
+        resp.raise_for_status()
+        html = resp.text
+
+        # Extract stanValueDenomination from the Next.js RSC payload
+        match = re.search(r'"stanValueDenomination\\":\s*(\[.*?\])\s*,\s*\\"brandColor', html)
+        if not match:
+            return {"available": False, "message": "⚠️ Could not find denomination data on page."}
+
+        raw = match.group(1).replace('\\"', '"')
+        denominations = json.loads(raw)
+
+        if denominations:
+            # Filter for active denominations
+            active = [d for d in denominations if d.get("status") == "active"]
+            if active:
+                msg = "🎉 *PhonePe Vouchers Available!*\n\n"
+                for d in active:
+                    value = d.get("value", "Unknown")
+                    price_info = d.get("price", {})
+                    price = price_info.get("amount", 0) if isinstance(price_info, dict) else price_info
+                    msg += f"💰 ₹{value}"
+                    if price:
+                        msg += f" - Price: ₹{price}"
+                    msg += "\n"
+                msg += f"\n🔗 [Buy Now]({STANSHOP_PRODUCT_URL})"
+                return {"available": True, "message": msg}
+        return {"available": False, "message": "📭 *No vouchers currently available*"}
     except Exception as e:
         return {"available": False, "message": f"⚠️ Error checking stock: {str(e)}"}
 
