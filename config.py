@@ -16,9 +16,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 # Monitoring Configuration
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "86400"))  # Default: 24 hours (1 day)
 
-# StanShop API Configuration
-STANSHOP_API_URL = "https://api.getstan.app/api/v1/shop/store/inventory/slug/phonepe-gift-voucher"
-STANSHOP_PRODUCT_URL = "https://www.stanshop.co/in/product/phonepe-gift-voucher"
+# StanShop Configuration (API deprecated - data scraped from product page)
+STANSHOP_PAGE_URL = "https://www.stanshop.co/in/product/phonepe-gift-card"
+STANSHOP_PRODUCT_URL = "https://www.stanshop.co/in/product/phonepe-gift-card"
 
 
 def validate_config():
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     print(f"  TELEGRAM_BOT_TOKEN: {'*' * 10 if TELEGRAM_BOT_TOKEN else 'NOT SET'}")
     print(f"  TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID if TELEGRAM_CHAT_ID else 'NOT SET'}")
     print(f"  CHECK_INTERVAL: {CHECK_INTERVAL} seconds")
-    print(f"  STANSHOP_API_URL: {STANSHOP_API_URL}")
+    print(f"  STANSHOP_PAGE_URL: {STANSHOP_PAGE_URL}")
     print()
     
     if validate_config():

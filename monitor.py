@@ -1,11 +1,13 @@
 """
-API Monitor for PhonePe Voucher availability on StanShop.
-Fetches inventory data and tracks denomination availability.
+Monitor for PhonePe Voucher availability on StanShop.
+Scrapes inventory data from the product page and tracks denomination availability.
 """
 
+import re
+import json
 import requests
 from datetime import datetime
-from config import STANSHOP_API_URL, STANSHOP_PRODUCT_URL
+from config import STANSHOP_PAGE_URL, STANSHOP_PRODUCT_URL
 
 
 # Store previous state to detect changes
@@ -15,21 +17,40 @@ _last_check_time = None
 
 def fetch_inventory():
     """
-    Fetch inventory data from StanShop API.
+    Fetch inventory data by scraping the StanShop product page.
+    The data is embedded in the HTML within Next.js RSC script tags.
     
     Returns:
-        dict: API response data or None if request fails
+        dict: Inventory data with stanValueDenomination or None if request fails
     """
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
+            "Accept": "text/html",
         }
-        response = requests.get(STANSHOP_API_URL, headers=headers, timeout=30)
+        response = requests.get(STANSHOP_PAGE_URL, headers=headers, timeout=30)
         response.raise_for_status()
-        return response.json()
+        html = response.text
+        
+        # Extract stanValueDenomination from the Next.js RSC payload
+        # The data is inside: self.__next_f.push([1,"...<escaped JSON>..."])
+        # Find the chunk containing stanValueDenomination
+        match = re.search(r'"stanValueDenomination\\":\s*(\[.*?\])\s*,\s*\\"brandColor', html)
+        if not match:
+            print("Could not find stanValueDenomination in page")
+            return None
+        
+        # The matched JSON array has escaped quotes (\\\") that need unescaping
+        raw = match.group(1).replace('\\"', '"')
+        denominations = json.loads(raw)
+        
+        # Return in the same shape the rest of the code expects
+        return {"inventory": {"stanValueDenomination": denominations}}
     except requests.RequestException as e:
-        print(f"Error fetching inventory: {e}")
+        print(f"Error fetching page: {e}")
+        return None
+    except (json.JSONDecodeError, AttributeError) as e:
+        print(f"Error parsing denomination data: {e}")
         return None
 
 
